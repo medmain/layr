@@ -2,14 +2,22 @@ import {MongoDBStore} from '../../../';
 
 const connectionString = 'mongodb://username:password@127.0.0.1:17932/storable?authSource=admin';
 
+let store;
+
+beforeAll(async () => {
+  const collectionNames = {
+    Movie: 'movies'
+  };
+  store = new MongoDBStore({connectionString, collectionNames});
+  await store.connect();
+});
+
+afterAll(() => {
+  store.disconnect();
+});
+
 describe('@storable/memory-store', () => {
   test('CRUD operations', async () => {
-    const collectionNames = {
-      Movie: 'movies'
-    };
-    const store = new MongoDBStore({connectionString, collectionNames});
-    await store.connect();
-
     expect(store.set({_type: 'Movie', _id: 'abc123', title: 'The Matrix'})).rejects.toThrow(
       /No document/i
     ); // The document doesn't exist yet so 'isNew' is required
@@ -53,8 +61,56 @@ describe('@storable/memory-store', () => {
 
     result = await store.delete({_type: 'Movie', _id: 'abc123'});
     expect(result).toBe(false);
+  });
 
-    store.disconnect();
-    expect(true).toBe(true);
+  test('Nesting documents', async () => {
+    await store.set({
+      _isNew: true,
+      _type: 'Movie',
+      _id: 'abc123',
+      title: 'Inception',
+      technicalSpecs: {
+        _isNew: true,
+        _type: 'TechnicalSpecs',
+        _id: 'xyz789',
+        runtime: 120,
+        aspectRatio: '2.39:1'
+      }
+    });
+
+    let movie = await store.get({_type: 'Movie', _id: 'abc123'});
+    expect(movie).toEqual({
+      _type: 'Movie',
+      _id: 'abc123',
+      title: 'Inception',
+      technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 120, aspectRatio: '2.39:1'}
+    });
+
+    // We can partially return nested documents
+    movie = await store.get(
+      {_type: 'Movie', _id: 'abc123'},
+      {return: {technicalSpecs: {runtime: true}}}
+    );
+    expect(movie).toEqual({
+      _type: 'Movie',
+      _id: 'abc123',
+      technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 120}
+    });
+
+    // We can partially modify nested documents
+    await store.set({
+      _type: 'Movie',
+      _id: 'abc123',
+      technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 130}
+    });
+    movie = await store.get({_type: 'Movie', _id: 'abc123'});
+    expect(movie).toEqual({
+      _type: 'Movie',
+      _id: 'abc123',
+      title: 'Inception',
+      technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 130, aspectRatio: '2.39:1'}
+    });
+
+    store.delete({_type: 'Movie', _id: 'abc123'});
   });
 });

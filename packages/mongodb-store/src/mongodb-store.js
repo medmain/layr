@@ -1,9 +1,10 @@
 import {MongoClient} from 'mongodb';
-import {isEmpty} from 'lodash';
-import filterObj from 'filter-obj';
 import debugModule from 'debug';
 
-const debug = debugModule('*');
+import {getDocumentToInsert, getProjection, getDocumentToUpdate} from './mongodb-util';
+
+const debug = debugModule('mongodb-store');
+const debugQuery = debugModule('mongodb-store:queries');
 
 export class MongoDBStore {
   constructor({connectionString, collectionNames} = {}) {
@@ -25,16 +26,17 @@ export class MongoDBStore {
     return this.db.collection(collectionName);
   }
 
-  async set({_isNew, _type, _id, ...fields}) {
-    const doc = {_id, ...fields};
+  async set(request) {
+    const {_isNew, _type, _id} = request;
     if (_isNew) {
-      const {result} = await this._getCollection(_type).insertOne(doc);
+      const document = getDocumentToInsert(request);
+      debugQuery('Insert', document);
+      const {result} = await this._getCollection(_type).insertOne(document);
       return result;
     }
     const query = {_id};
-    const $set = filterObj(fields, (key, value) => value !== undefined);
-    const $unset = filterObj(fields, (key, value) => value === undefined);
-    const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value));
+    const update = getDocumentToUpdate(request);
+    debugQuery(`Update "${_id}"`, update);
     const result = await this._getCollection(_type).updateOne(query, update);
     if (result.matchedCount === 0) {
       throw new Error(`No document "${_id}" found in the collection ${_type}`);
@@ -42,19 +44,9 @@ export class MongoDBStore {
     return true;
   }
 
-  _getProjection(returnFields = {}) {
-    if (returnFields === false) {
-      return {_id: 1};
-    }
-    if (returnFields === true) {
-      return {};
-    }
-    return returnFields;
-  }
-
   async get({_type, _id}, {return: returnFields = true} = {}) {
     const query = {_id};
-    const projection = this._getProjection(returnFields);
+    const projection = getProjection(returnFields);
     const foundDoc = await this._getCollection(_type).findOne(query, {projection});
     if (!foundDoc) {
       return undefined;
