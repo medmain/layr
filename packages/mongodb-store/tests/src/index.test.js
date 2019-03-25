@@ -244,4 +244,44 @@ describe('@storable/memory-store', () => {
     result = await store.delete({_type: 'Actor', _id: 'xyz456'});
     expect(result).toBe(true);
   });
+
+  test('Multi CRUD operations', async () => {
+    // Create
+    await store.set([
+      {_isNew: true, _type: 'Movie', _id: 'abc005', title: 'Inception'},
+      {_isNew: true, _type: 'Movie', _id: 'abc006', title: 'The Matrix'}
+    ]);
+
+    // Read
+    let movies = await store.get([
+      {_type: 'Movie', _id: 'abc005'},
+      {_type: 'Movie', _id: 'abc006'}
+    ]);
+    expect(movies).toEqual([
+      {_type: 'Movie', _id: 'abc005', title: 'Inception'},
+      {_type: 'Movie', _id: 'abc006', title: 'The Matrix'}
+    ]);
+
+    // Update
+    await store.set([
+      {_type: 'Movie', _id: 'abc005', rating: 8.8},
+      {_type: 'Movie', _id: 'abc006', rating: 8.7}
+    ]);
+    movies = await store.get([{_type: 'Movie', _id: 'abc005'}, {_type: 'Movie', _id: 'abc006'}]);
+    expect(movies).toEqual([
+      {_type: 'Movie', _id: 'abc005', title: 'Inception', rating: 8.8},
+      {_type: 'Movie', _id: 'abc006', title: 'The Matrix', rating: 8.7}
+    ]);
+
+    // Delete
+    let result = await store.delete([
+      {_type: 'Movie', _id: 'abc005'},
+      {_type: 'Movie', _id: 'abc006'}
+    ]);
+    expect(result).toEqual([true, true]);
+    movies = await store.get([{_type: 'Movie', _id: 'abc123'}, {_type: 'Movie', _id: 'abc456'}]);
+    expect(movies).toEqual([undefined, undefined]);
+    result = await store.delete([{_type: 'Movie', _id: 'abc123'}, {_type: 'Movie', _id: 'abc456'}]);
+    expect(result).toEqual([false, false]);
+  });
 });

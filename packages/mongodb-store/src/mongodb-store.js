@@ -1,8 +1,9 @@
 import {MongoClient} from 'mongodb';
 import debugModule from 'debug';
 import {isEmpty, get} from 'lodash';
+import {callWithOneOrManyAsync, mapFromOneOrManyAsync} from '@storable/util';
 
-import {getDocumentToInsert, getProjection, getDocumentToUpdate} from './mongodb-util';
+import {getDocumentToInsert, getDocumentToUpdate, getProjection} from './mongodb-util';
 
 import {findAllRelations, mergeRelatedDocuments, getPopulateRequests} from './relations-util';
 
@@ -29,22 +30,24 @@ export class MongoDBStore {
     return this.db.collection(collectionName);
   }
 
-  async set(request) {
-    const {_isNew, _type, _id} = request;
-    if (_isNew) {
-      const document = getDocumentToInsert(request);
-      debugQuery(`Insert ${_type}`, document);
-      const {result} = await this._getCollection(_type).insertOne(document);
-      return result;
-    }
-    const query = {_id};
-    const update = getDocumentToUpdate(request);
-    debugQuery(`Update ${_type} "${_id}"`, update);
-    const result = await this._getCollection(_type).updateOne(query, update);
-    if (result.matchedCount === 0) {
-      throw new Error(`No document "${_id}" found in the collection ${_type}`);
-    }
-    return true;
+  async set(document) {
+    return callWithOneOrManyAsync(document, async doc => {
+      const {_isNew, _type, _id} = doc;
+      if (_isNew) {
+        const newDocument = getDocumentToInsert(doc);
+        debugQuery(`Insert ${_type}`, newDocument);
+        const {result} = await this._getCollection(_type).insertOne(newDocument);
+        return result;
+      }
+      const query = {_id};
+      const update = getDocumentToUpdate(doc);
+      debugQuery(`Update ${_type} "${_id}"`, update);
+      const result = await this._getCollection(_type).updateOne(query, update);
+      if (result.matchedCount === 0) {
+        throw new Error(`No document "${_id}" found in the collection ${_type}`);
+      }
+      return true;
+    });
   }
 
   async _findOne({_type, _id}, {return: returnFields = true} = {}) {
@@ -73,10 +76,12 @@ export class MongoDBStore {
   }
 
   async get(document, options) {
-    if (Array.isArray(document._id)) {
-      return this._findMany(document, options);
-    }
-    return this._findOne(document, options);
+    return mapFromOneOrManyAsync(document, doc => {
+      if (Array.isArray(doc._id)) {
+        return this._findMany(doc, options);
+      }
+      return this._findOne(doc, options);
+    });
   }
 
   async populate(documents, parentReturnFields) {
@@ -97,9 +102,11 @@ export class MongoDBStore {
     return populated;
   }
 
-  async delete({_type, _id}) {
-    const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
-    return result.n > 0;
+  async delete(document) {
+    return mapFromOneOrManyAsync(document, async ({_type, _id}) => {
+      const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
+      return result.n > 0;
+    });
   }
 }
 
