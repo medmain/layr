@@ -1,6 +1,6 @@
 import {MongoClient} from 'mongodb';
 import debugModule from 'debug';
-import {isEmpty, get} from 'lodash';
+import {isEmpty, isInteger, get} from 'lodash';
 import {callWithOneOrManyAsync, mapFromOneOrManyAsync} from '@storable/util';
 
 import {getDocumentToInsert, getDocumentToUpdate, getProjection} from './mongodb-util';
@@ -50,31 +50,6 @@ export class MongoDBStore {
     });
   }
 
-  async _findOne({_type, _id}, {return: returnFields = true} = {}) {
-    const query = {_id};
-    const projection = getProjection(returnFields);
-    debugQuery(`findOne ${_type}`, query, projection);
-    const foundDoc = await this._getCollection(_type).findOne(query, {projection});
-    if (!foundDoc) {
-      return undefined;
-    }
-    const populatedDoc = await this.populate(foundDoc, returnFields);
-    return {_type, ...populatedDoc};
-  }
-
-  async _findManyById({_type, _id}, {return: returnFields = true} = {}) {
-    if (!Array.isArray(_id)) {
-      throw new Error(`"_id" parameter passed to findManyById should be an array`);
-    }
-    const query = {_id: {$in: _id}};
-    const projection = getProjection(returnFields);
-    debugQuery(`findMany ${_type}`, query, projection);
-    const documents = await this._getCollection(_type)
-      .find(query, {projection})
-      .toArray();
-    return documents.map(document => ({_type, ...document}));
-  }
-
   async get(document, options) {
     return mapFromOneOrManyAsync(document, doc => {
       if (Array.isArray(doc._id)) {
@@ -84,7 +59,51 @@ export class MongoDBStore {
     });
   }
 
-  async populate(documents, parentReturnFields) {
+  async find({_type, ...document}, options) {
+    return this._findMany(_type, document, options);
+  }
+
+  async _findOne({_type, _id}, {return: returnFields = true} = {}) {
+    const query = {_id};
+    const projection = getProjection(returnFields);
+    debugQuery(`findOne ${_type}`, query, projection);
+    const foundDoc = await this._getCollection(_type).findOne(query, {projection});
+    if (!foundDoc) {
+      return undefined;
+    }
+    const populatedDoc = await this._populate(foundDoc, returnFields);
+    return {_type, ...populatedDoc};
+  }
+
+  async _findMany(_type, query, {return: returnFields = true, limit, skip} = {}) {
+    const projection = getProjection(returnFields);
+    debugQuery(`findMany ${_type}`, query, projection);
+    let cursor = this._getCollection(_type).find(query, {projection});
+    if (limit) {
+      if (!isInteger(limit)) {
+        throw new Error('Find method `limit` parameter should be an integer');
+      }
+      cursor = cursor.limit(limit);
+    }
+    if (skip) {
+      if (!isInteger(skip)) {
+        throw new Error('Find method `skip` parameter should be an integer');
+      }
+      cursor = cursor.skip(skip);
+    }
+    const documents = await cursor.toArray();
+    return documents.map(document => ({_type, ...document}));
+  }
+
+  async _findManyById({_type, _id}, options) {
+    if (!Array.isArray(_id)) {
+      throw new Error(`"_id" parameter passed to findManyById should be an array`);
+    }
+    const query = {_id: {$in: _id}};
+    return this._findMany(_type, query, options);
+  }
+
+  async _populate(documents, parentReturnFields) {
     const relations = findAllRelations(documents);
     if (isEmpty(relations)) {
       return documents;

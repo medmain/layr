@@ -21,7 +21,7 @@ afterAll(() => {
   store.disconnect();
 });
 
-describe('@storable/memory-store', () => {
+describe('@storable/mongodb-store', () => {
   test('CRUD operations', async () => {
     expect(store.set({_type: 'Movie', _id: 'abc001', title: 'The Matrix'})).rejects.toThrow(
       /No document/i
@@ -283,5 +283,56 @@ describe('@storable/memory-store', () => {
     expect(movies).toEqual([undefined, undefined]);
     result = await store.delete([{_type: 'Movie', _id: 'abc123'}, {_type: 'Movie', _id: 'abc456'}]);
     expect(result).toEqual([false, false]);
+  });
+
+  test('Finding documents', async () => {
+    await store.set([
+      {
+        _isNew: true,
+        _type: 'Movie',
+        _id: 'movie1',
+        title: 'Inception',
+        genre: 'action',
+        country: 'USA'
+      },
+      {
+        _isNew: true,
+        _type: 'Movie',
+        _id: 'movie2',
+        title: 'Forrest Gump',
+        genre: 'drama',
+        country: 'USA'
+      },
+      {
+        _isNew: true,
+        _type: 'Movie',
+        _id: 'movie3',
+        title: 'Léon',
+        genre: 'action',
+        country: 'France'
+      }
+    ]);
+
+    let movies = await store.find({_type: 'Movie'});
+    expect(movies.map(movie => movie._id)).toEqual(['movie1', 'movie2', 'movie3']);
+
+    movies = await store.find({_type: 'Movie', genre: 'action'});
+    expect(movies.map(movie => movie._id)).toEqual(['movie1', 'movie3']);
+
+    movies = await store.find({_type: 'Movie', genre: 'action', country: 'France'});
+    expect(movies.map(movie => movie._id)).toEqual(['movie3']);
+
+    movies = await store.find({_type: 'Movie', genre: 'adventure'});
+    expect(movies.map(movie => movie._id)).toEqual([]);
+
+    movies = await store.find({_type: 'Movie'}, {skip: 1, limit: 1});
+    expect(movies.map(movie => movie._id)).toEqual(['movie2']);
+
+    movies = await store.find({_type: 'Movie'}, {return: {title: true}});
+    expect(movies).toEqual([
+      {_type: 'Movie', _id: 'movie1', title: 'Inception'},
+      {_type: 'Movie', _id: 'movie2', title: 'Forrest Gump'},
+      {_type: 'Movie', _id: 'movie3', title: 'Léon'}
+    ]);
   });
 });
