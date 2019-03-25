@@ -1,5 +1,6 @@
 import {isEmpty} from 'lodash';
 import filterObj from 'filter-obj';
+import isPlainObject from 'is-plain-obj';
 
 /*
 From a creation request made with store `set()` method,
@@ -52,6 +53,11 @@ export function getProjection(returnFields) {
     result[key] = value;
   };
   const setFields = (object, path) => {
+    if (isEmpty(object)) {
+      addPathValue([...path, '_id'], 1);
+      addPathValue([...path, '_type'], 1);
+      addPathValue([...path, '_ref'], 1);
+    }
     for (const [name, value] of Object.entries(object)) {
       if (isPlainObject(value)) {
         setFields(value, [...path, name]);
@@ -86,8 +92,4 @@ export function flattenWithDotPath(object) {
     return result;
   };
   return setFields(object, []);
-}
-
-function isPlainObject(value) {
-  return typeof value === 'object' && Object.entries(value).length > 0 && !Array.isArray(value);
 }

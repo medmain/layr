@@ -1,8 +1,12 @@
-import {getDocumentToInsert, flattenWithDotPath} from '../../../dist/node/cjs/mongodb-util';
+import {
+  getDocumentToInsert,
+  flattenWithDotPath,
+  getProjection
+} from '../../../dist/node/cjs/mongodb-util';
 
-const testCases = [
-  {
-    input: {
+describe('insert', () => {
+  test('getDocumentToInsert', () => {
+    const input = {
       _isNew: true,
       _type: 'Movie',
       _id: 'abc123',
@@ -14,8 +18,8 @@ const testCases = [
         runtime: 120,
         aspectRatio: '2.39:1'
       }
-    },
-    output: {
+    };
+    const expected = {
       _id: 'abc123',
       title: 'Inception',
       technicalSpecs: {
@@ -24,23 +28,23 @@ const testCases = [
         runtime: 120,
         aspectRatio: '2.39:1'
       }
-    },
-    comment: 'Basic request'
-  }
-];
-
-describe('insert', () => {
-  testCases.forEach(({input, output, comment}) => {
-    test(comment, () => {
-      const actualResult = getDocumentToInsert(input);
-      expect(actualResult).toEqual(output);
-    });
+    };
+    const output = getDocumentToInsert(input);
+    expect(output).toEqual(expected);
   });
 });
 
-describe('flattenWithDotProp', () => {
-  test('Convert a nested object into a flat object using the `dotprop` syntax', () => {
+describe('Util functions', () => {
+  test('flattenWithDotPath', () => {
     expect(flattenWithDotPath({a: {b: {c: 1}}, name: 0})).toEqual({'a.b.c': 1, name: 0});
     expect(flattenWithDotPath({})).toEqual({});
+  });
+
+  test('getProjection', () => {
+    expect(getProjection({director: {}})).toEqual({
+      'director._id': 1,
+      'director._type': 1,
+      'director._ref': 1
+    });
   });
 });
