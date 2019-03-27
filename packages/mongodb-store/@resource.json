@@ -12,7 +12,6 @@
   "dependencies": {
     "debug": "^4.1.1",
     "filter-obj": "^1.1.0",
-    "is-plain-obj": "^1.1.0",
     "lodash": "^4.17.11",
     "mongodb": "^3.1.13",
     "@storable/util": "^0.1.0"

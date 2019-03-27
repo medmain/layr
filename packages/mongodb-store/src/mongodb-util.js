@@ -1,6 +1,5 @@
-import {isEmpty} from 'lodash';
+import {isEmpty, isPlainObject} from 'lodash';
 import filterObj from 'filter-obj';
-import isPlainObject from 'is-plain-obj';
 
 /*
 From a creation request made with store `set()` method,

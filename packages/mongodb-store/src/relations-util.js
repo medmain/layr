@@ -3,8 +3,7 @@ A bunch of synchronous functions to manipulate document relations
 (No request to the database here)
 */
 
-import {mapValues, groupBy, uniq} from 'lodash';
-import isPlainObject from 'is-plain-obj';
+import {mapValues, groupBy, uniq, isPlainObject} from 'lodash';
 import {callWithOneOrMany, mapFromOneOrMany} from '@storable/util';
 
 /*
