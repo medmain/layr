@@ -8,14 +8,24 @@ A store for [MongoDB](https://www.mongodb.com/) database, to be used with [@stor
 npm install @storable/mongodb-store
 ```
 
+## Overview
+
 ```js
 import {MongoDBStore} from '@storable/mongodb-store';
 
 const store = new MongoDBStore({connectionString: 'mongodb://...');
-await store.connect()
+
+// Open the MongoDB connection
+await store.connect();
+
+// Query the database
+const movie = await store.get({_type: 'Movie', _id: 'abc001'});
+
+// Close the MongoDB connection
+store.disconnect();
 ```
 
-## MongoDbStore API
+## MongoDBStore API
 
 ### `set(document)`
 
@@ -43,7 +53,7 @@ await store.set({
 });
 ```
 
-`set` method accepts a single argument:
+`set` method accepts an object as its single argument:
 
 - `_isNew: true` specifies a document **creation**. `_isNew: false` is used for document **updates**.
 - `_type` specifies the collection where to store the document
@@ -76,11 +86,33 @@ const movie = await store.get({_type: 'Movie', _id: 'xyz123'}, {return: {title: 
 ### `find(query, options)`
 
 Used to find several documents that match search criteria.
+Return an array of the matching documents, or an empty array if no document was found.
 
 ```js
 const movies = await store.find({_type: 'Movie'});
 // => will return the array of all documents in the `Movie` collection
 ```
+
+Available options:
+
+- `return`
+- `skip`
+- `limit`
+- `sort` (coming soon)
+
+As for the `get()` method, the `find()` method accepts a `return` option to specify the fields to include in the response.
+
+```js
+const movies = await store.find({_type: 'Movie'}, {return: {title: true}});
+// =>
+// [
+//   {_type: 'Movie', _id: 'movie1', title: 'Inception'},
+//   {_type: 'Movie', _id: 'movie2', title: 'Forrest Gump'},
+//   {_type: 'Movie', _id: 'movie3', title: 'Léon'}
+// ]
+```
+
+`skip` and `limit` are used to paginate the list of results, requesting documents from a given index and limiting the number of documents returned.
 
 ### `delete(query)`
 
@@ -89,13 +121,14 @@ const result = await store.delete({_type: 'Movie', _id: 'abc001'});
 // => return true if the document has been deleted
 ```
 
-### Relations between documents
+### How to reference documents
 
-The `_ref: true` attribute is used to specify a relation with a document stored in an other collection.
+The `_ref: true` attribute is used to reference documents in other collections.
 
 The following code will create 2 documents, in 2 different collections:
 
 ```js
+// Create "Movie" document, that has a link (a reference) to a "Director" document
 await store.set({
   _isNew: true,
   _type: 'Movie',
@@ -103,6 +136,8 @@ await store.set({
   title: 'Inception',
   director: {_type: 'Director', _id: 'xyz123', _ref: true}
 });
+
+// Create the "Director" document
 await store.set({
   _isNew: true,
   _type: 'Director',
@@ -111,21 +146,50 @@ await store.set({
 });
 ```
 
-By default, when a document related to other documents is retrieved, data from the related documents is automatically included (the main document is "populated" with the related documents).
+By default, when a document that contains references is retrieved, data from the related documents is automatically included.
+
+This feature is similar to the _population_ feature from [Mongoose](https://mongoosejs.com/docs/populate.html) library:
+
+> Population is the process of automatically replacing the specified paths in the document with document(s) from other collection(s)
+
+So if we query the previous movie, the result will contain the Movie **and** its director:
 
 ```js
 const movie = await store.get({_type: 'Movie', _id: 'abc003'});
+// =>
+// {
+//   _type: 'Movie',
+//   _id: 'abc003',
+//   title: 'Inception',
+//   director: {_type: 'Director', _id: 'xyz123', _ref: true, fullName: 'Christopher Nolan'}
+// }
 ```
 
-The result will contain the Movie **and** its director:
+This is the default behavior but it can be adjusted at will using the `return` option.
+
+The following code will return only the movie and its title, the "director" will not be included:
 
 ```js
-{
-  _type: 'Movie',
-  _id: 'abc003',
-  title: 'Inception',
-  director: {_type: 'Director', _id: 'xyz123', _ref: true, fullName: 'Christopher Nolan'}
-}
+const movie = await store.get({_type: 'Movie', _id: 'abc003'}, {return: {title: true}});
+// => {_type: 'Movie', _id: 'abc003', title: 'Inception'}
+```
+
+Using an empty object `{}` inside the `return` option, the population will be limited to the `_id`.
+
+```js
+const movie = await store.get(
+  {_type: 'Movie', _id: 'abc003'},
+  {return: {title: true, director: {}}}
+);
+// =>
+// {
+//    _type: 'Movie',
+//    _id: 'abc003',
+//    title: 'Inception',
+//    director: {
+//      _type: 'Director', _id: 'xyz123', _ref: true
+//    }
+// }
 ```
 
 ## How to use it with models and the registry
