@@ -5,16 +5,8 @@ const connectionString = 'mongodb://username:password@127.0.0.1:17932/storable?a
 let store;
 
 beforeAll(async () => {
-  const collectionNames = {
-    Movie: 'movies',
-    Director: 'directors',
-    Actor: 'actors'
-  };
-  store = new MongoDBStore({connectionString, collectionNames});
+  store = new MongoDBStore(connectionString);
   await store.connect();
-  // Temporary cleanup while the store is under heavy development
-  const deleteAllDocuments = collectionName => store.db.collection(collectionName).deleteMany({});
-  await Promise.all(Object.values(collectionNames).map(deleteAllDocuments));
 });
 
 afterAll(() => {
@@ -114,6 +106,20 @@ describe('@storable/mongodb-store', () => {
       _id: 'abc002',
       title: 'Inception',
       technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 130, aspectRatio: '2.39:1'}
+    });
+
+    // Overwrite totally the nested doc
+    await store.set({
+      _type: 'Movie',
+      _id: 'abc002',
+      technicalSpecs: {_isNew: true, _type: 'TechnicalSpecs', _id: 'xyz789', runtime: 120}
+    });
+    movie = await store.get({_type: 'Movie', _id: 'abc002'});
+    expect(movie).toEqual({
+      _type: 'Movie',
+      _id: 'abc002',
+      title: 'Inception',
+      technicalSpecs: {_type: 'TechnicalSpecs', _id: 'xyz789', runtime: 120} // aspectRatio is lost!
     });
 
     store.delete({_type: 'Movie', _id: 'abc002'});
@@ -334,5 +340,6 @@ describe('@storable/mongodb-store', () => {
       {_type: 'Movie', _id: 'movie2', title: 'Forrest Gump'},
       {_type: 'Movie', _id: 'movie3', title: 'Léon'}
     ]);
+    await store.delete(movies);
   });
 });

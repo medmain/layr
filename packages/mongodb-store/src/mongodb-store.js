@@ -11,19 +11,22 @@ const debug = debugModule('mongodb-store');
 const debugQuery = debugModule('mongodb-store:queries');
 
 export class MongoDBStore {
-  constructor({connectionString, collectionNames} = {}) {
+  constructor(connectionString, {collectionNames = {}} = {}) {
     this.connectionString = connectionString;
     this.collectionNames = collectionNames;
   }
 
   async connect(databaseName) {
+    if (this.db) {
+      return;
+    }
     const {db, disconnect} = await connectMongoDB(this.connectionString, databaseName);
     this.db = db;
     this.disconnect = disconnect;
   }
 
   _getCollection(_type) {
-    const collectionName = this.collectionNames[_type];
+    const collectionName = this.collectionNames[_type] || _type;
     if (!collectionName) {
       throw new Error(`No collection set up for the type "${_type}"`);
     }
@@ -31,7 +34,8 @@ export class MongoDBStore {
   }
 
   async set(document) {
-    return callWithOneOrManyAsync(document, async doc => {
+    await this.connect();
+    return await callWithOneOrManyAsync(document, async doc => {
       const {_isNew, _type, _id} = doc;
       if (_isNew) {
         const newDocument = getDocumentToInsert(doc);
@@ -51,11 +55,11 @@ export class MongoDBStore {
   }
 
   async get(document, options) {
-    return mapFromOneOrManyAsync(document, doc => {
+    return await mapFromOneOrManyAsync(document, async doc => {
       if (Array.isArray(doc._id)) {
-        return this._findMany(doc, options);
+        return await this._findMany(doc, options);
       }
-      return this._findOne(doc, options);
+      return await this._findOne(doc, options);
     });
   }
 
@@ -67,6 +71,7 @@ export class MongoDBStore {
     const query = {_id};
     const projection = getProjection(returnFields);
     debugQuery(`findOne ${_type}`, query, projection);
+    await this.connect();
     const foundDoc = await this._getCollection(_type).findOne(query, {projection});
     if (!foundDoc) {
       return undefined;
@@ -78,6 +83,7 @@ export class MongoDBStore {
   async _findMany(_type, query, {return: returnFields = true, limit, skip} = {}) {
     const projection = getProjection(returnFields);
     debugQuery(`findMany ${_type}`, query, projection);
+    await this.connect();
     let cursor = this._getCollection(_type).find(query, {projection});
     if (limit) {
       if (!isInteger(limit)) {
@@ -122,7 +128,8 @@ export class MongoDBStore {
   }
 
   async delete(document) {
-    return mapFromOneOrManyAsync(document, async ({_type, _id}) => {
+    await this.connect();
+    return await mapFromOneOrManyAsync(document, async ({_type, _id}) => {
       const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
       return result.n > 0;
     });

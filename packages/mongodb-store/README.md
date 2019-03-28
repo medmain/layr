@@ -13,10 +13,7 @@ npm install @storable/mongodb-store
 ```js
 import {MongoDBStore} from '@storable/mongodb-store';
 
-const store = new MongoDBStore({connectionString: 'mongodb://...');
-
-// Open the MongoDB connection
-await store.connect();
+const store = new MongoDBStore('mongodb://127.0.0.1/test');
 
 // Query the database
 const movie = await store.get({_type: 'Movie', _id: 'abc001'});
@@ -26,6 +23,14 @@ store.disconnect();
 ```
 
 ## MongoDBStore API
+
+### `new MongoDBStore(connectionString, options)`
+
+The MongoDBStore constructor accepts two parameters:
+
+- the MongoDB "connection string": `mongodb://username:password@host:port/dbName?authSource=admin` for example
+- an object of `options` to customize the default behavior
+  - `collectionNames`: an object to map document's `_type` property with the collection names
 
 ### `set(document)`
 

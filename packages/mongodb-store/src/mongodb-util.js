@@ -1,4 +1,4 @@
-import {isEmpty, isPlainObject} from 'lodash';
+import {isEmpty, isPlainObject, set, omit} from 'lodash';
 import filterObj from 'filter-obj';
 
 /*
@@ -28,11 +28,30 @@ From an update request made with store `set()` method,
 return the `update` parameter to pass to MongoDB `updateOne` method.
 */
 export function getDocumentToUpdate(request) {
-  const {_isNew, _type, _id, ...fields} = request;
-  const $set = flattenWithDotPath(filterObj(fields, (key, value) => value !== undefined));
-  const $unset = filterObj(fields, (key, value) => value === undefined);
-  const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value));
-  return update;
+  const $set = {};
+  const $unset = {};
+  const setFields = (object, path = []) => {
+    const {_type, _isNew, ...fields} = object;
+    for (const [name, value] of Object.entries(fields)) {
+      if (isPlainObject(value)) {
+        if (value._isNew) {
+          // full update
+          set($set, [...path, name].join('.'), omit(value, '_isNew'));
+        } else {
+          setFields(value, [...path, name], false);
+        }
+      } else {
+        const fieldName = [...path, name].join('.');
+        if (value === undefined) {
+          $unset[fieldName] = 1;
+        } else {
+          $set[fieldName] = value;
+        }
+      }
+    }
+  };
+  setFields(request, [], true);
+  return filterObj({$set, $unset}, (key, value) => !isEmpty(value));
 }
 
 /*
