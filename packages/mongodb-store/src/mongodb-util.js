@@ -1,40 +1,19 @@
 import {isEmpty, isPlainObject, set, omit} from 'lodash';
-import filterObj from 'filter-obj';
-
-/*
-From a creation request made with store `set()` method,
-return the document to insert in the MongoDB collection.
-*/
-export function getDocumentToInsert(request) {
-  const setFields = (input, isRootLevel) => {
-    const documentToInsert = {};
-    const {_isNew, _type, ...other} = input;
-    const fields = isRootLevel ? other : {_type, ...other}; // we don't want the `type` to be stored at the root level
-    for (const [name, value] of Object.entries(fields)) {
-      if (isPlainObject(value)) {
-        documentToInsert[name] = setFields(value);
-      } else {
-        documentToInsert[name] = value;
-      }
-    }
-    return documentToInsert;
-  };
-
-  return setFields(request, true);
-}
 
 /*
 From an update request made with store `set()` method,
-return the `update` parameter to pass to MongoDB `updateOne` method.
+return the `update` parameter to pass to MongoDB `updateOne` method,
+or the document to be passed to `insert` method
 */
-export function getDocumentToUpdate(request) {
+export function parseSetRequest(request) {
   const $set = {};
   const $unset = {};
+  const isNewDocument = request._isNew;
   const setFields = (object, path = []) => {
     const {_type, _isNew, ...fields} = object;
     for (const [name, value] of Object.entries(fields)) {
       if (isPlainObject(value)) {
-        if (value._isNew) {
+        if (isNewDocument || value._isNew) {
           // full update
           set($set, [...path, name].join('.'), omit(value, '_isNew'));
         } else {
@@ -50,8 +29,8 @@ export function getDocumentToUpdate(request) {
       }
     }
   };
-  setFields(request, [], true);
-  return filterObj({$set, $unset}, (key, value) => !isEmpty(value));
+  setFields(request, []);
+  return {$set, $unset};
 }
 
 /*
@@ -90,24 +69,4 @@ export function getProjection(returnFields) {
     return result;
   };
   return setFields(returnFields, []);
-}
-
-/*
-Flatten a deeply nested object using the "dot path" syntax.
-See https://github.com/sindresorhus/dot-prop for an example
-*/
-export function flattenWithDotPath(object) {
-  const result = {};
-  const setFields = (object, path) => {
-    for (const [name, value] of Object.entries(object)) {
-      const keys = [...path, name];
-      if (isPlainObject(value)) {
-        setFields(value, [...path, name]);
-      } else {
-        result[keys.join('.')] = value;
-      }
-    }
-    return result;
-  };
-  return setFields(object, []);
 }

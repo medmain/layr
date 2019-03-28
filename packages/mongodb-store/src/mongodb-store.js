@@ -1,9 +1,10 @@
 import {MongoClient} from 'mongodb';
 import debugModule from 'debug';
 import {isEmpty, isInteger, get} from 'lodash';
+import filterObj from 'filter-obj';
 import {callWithOneOrManyAsync, mapFromOneOrManyAsync} from '@storable/util';
 
-import {getDocumentToInsert, getDocumentToUpdate, getProjection} from './mongodb-util';
+import {parseSetRequest, getProjection} from './mongodb-util';
 
 import {findAllRelations, mergeRelatedDocuments, getPopulateRequests} from './relations-util';
 
@@ -36,15 +37,16 @@ export class MongoDBStore {
   async set(document) {
     await this.connect();
     return await callWithOneOrManyAsync(document, async doc => {
+      const {$set, $unset} = parseSetRequest(doc);
       const {_isNew, _type, _id} = doc;
       if (_isNew) {
-        const newDocument = getDocumentToInsert(doc);
+        const newDocument = $set;
         debugQuery(`Insert ${_type}`, newDocument);
         const {result} = await this._getCollection(_type).insertOne(newDocument);
         return result;
       }
       const query = {_id};
-      const update = getDocumentToUpdate(doc);
+      const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value));
       debugQuery(`Update ${_type} "${_id}"`, update);
       const result = await this._getCollection(_type).updateOne(query, update);
       if (result.matchedCount === 0) {
