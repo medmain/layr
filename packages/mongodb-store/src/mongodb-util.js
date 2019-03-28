@@ -1,37 +1,4 @@
-import {isEmpty, isPlainObject, set, omit} from 'lodash';
-
-/*
-From an update request made with store `set()` method,
-return the `update` parameter to pass to MongoDB `updateOne` method,
-or the document to be passed to `insert` method
-*/
-export function parseSetRequest(request) {
-  const $set = {};
-  const $unset = {};
-  const isNewDocument = request._isNew;
-  const setFields = (object, path = []) => {
-    const {_type, _isNew, ...fields} = object;
-    for (const [name, value] of Object.entries(fields)) {
-      if (isPlainObject(value)) {
-        if (isNewDocument || value._isNew) {
-          // full update
-          set($set, [...path, name].join('.'), omit(value, '_isNew'));
-        } else {
-          setFields(value, [...path, name], false);
-        }
-      } else {
-        const fieldName = [...path, name].join('.');
-        if (value === undefined) {
-          $unset[fieldName] = 1;
-        } else {
-          $set[fieldName] = value;
-        }
-      }
-    }
-  };
-  setFields(request, []);
-  return {$set, $unset};
-}
+import {isEmpty, isPlainObject} from 'lodash';
 
 /*
 From the `returnFields` option of a store `get()` request,
