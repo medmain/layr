@@ -1,6 +1,8 @@
 /*
-A bunch of synchronous functions to manipulate document relations
-(No request to the database here)
+A bunch of synchronous functions to manipulate document relations (_ref)
+No request to the database here.
+Needed for the population step:
+"Replacing the specified paths in the document with document(s) from other collection(s))""
 */
 
 import {mapValues, groupBy, uniq, isPlainObject} from 'lodash';
@@ -39,10 +41,15 @@ export function findAllRelations(object) {
 }
 
 /*
-Loop through an object of relations, grouping by `_type` and field `path`
-and return an array of find requests to be made
+Return an array of actual database "requests" to be made
+Looping through all the relations found at a previous step
+and grouping things to optimize the number of requests.
 E.g.:
-[{_type, path, ids: [id1,  id2,...]}]
+[{
+  _type: 'Actor',
+  path: 'actors',
+  ids: ['id001',  'id2002', ...]
+}]
 */
 export function getPopulateRequests(relations) {
   const byTypeAndPath = groupBy(relations, ({_type, path}) => `${_type} ${path}`);
@@ -56,7 +63,7 @@ export function getPopulateRequests(relations) {
 
 /*
 Enhance an array of documents with data coming from "related documents",
-to perform the "populate state"
+to perform the "populate" step.
 */
 export function mergeRelatedDocuments(documents, relatedDocuments) {
   return mapFromOneOrMany(documents, document => {

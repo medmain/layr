@@ -179,7 +179,7 @@ describe('@storable/mongodb-store', () => {
     });
 
     // Fetch the playlist with the movies and the directors... it's two-level deep "population"!
-    const playlist = await store.get({_type: 'Playlist', _id: 'list001'});
+    let playlist = await store.get({_type: 'Playlist', _id: 'list001'});
     expect(playlist).toEqual({
       _id: 'list001',
       _type: 'Playlist',
@@ -191,6 +191,23 @@ describe('@storable/mongodb-store', () => {
           _id: 'abc003',
           title: 'Inception',
           director: {_type: 'Director', _ref: true, _id: 'xyz123', fullName: 'Christopher Nolan'}
+        }
+      ]
+    });
+
+    playlist = await store.get(
+      {_type: 'Playlist', _id: 'list001'},
+      {return: {movies: [{title: true}]}}
+    );
+    expect(playlist).toEqual({
+      _id: 'list001',
+      _type: 'Playlist',
+      movies: [
+        {
+          _type: 'Movie',
+          _ref: true,
+          _id: 'abc003',
+          title: 'Inception'
         }
       ]
     });

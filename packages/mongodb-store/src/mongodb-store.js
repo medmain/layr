@@ -135,7 +135,10 @@ export class MongoDBStore {
     const relatedDocuments = [];
     const requests = getPopulateRequests(relations);
     for (const {_type, path, ids} of requests) {
-      const returnFields = get(parentReturnFields, path);
+      const returnFields = ignoreArray(get(parentReturnFields, path));
+      if (returnFields === false || (isPlainObject(returnFields) && isEmpty(returnFields))) {
+        continue;
+      }
       const docs = await await this._findManyById({_type, _id: ids}, {return: returnFields});
       relatedDocuments.push(...docs); // `...` is used to flatten the array of array
     }
@@ -146,6 +149,8 @@ export class MongoDBStore {
   async delete(document) {
     await this.connect();
     return await mapFromOneOrManyAsync(document, async ({_type, _id}) => {
+      validateType(_type);
+      validateId(_id);
       const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
       return result.n > 0;
     });
@@ -176,31 +181,35 @@ async function connectMongoDB(url, databaseName) {
 From the `returnFields` option of a store `get()` request,
 return the field `projection` to be passed to MongoDB `find` and `findOne` methods.
 */
-export function getProjection(returnFields) {
+function getProjection(returnFields) {
   if (returnFields === false) {
-    return {_id: 1};
+    return {_id: 1, _type: true};
   }
   if (returnFields === true) {
-    return {};
+    return {}; // return everything
   }
   const result = {};
   const addPathValue = (path, value) => {
     const key = path.join('.');
     result[key] = value;
   };
+
   const setFields = (object, path) => {
+    const isRootPath = path.length === 0;
     if (isEmpty(object)) {
       addPathValue([...path, '_id'], 1);
       addPathValue([...path, '_type'], 1);
       addPathValue([...path, '_ref'], 1);
     }
-    for (const [name, value] of Object.entries(object)) {
+    for (const [name, val] of Object.entries(ignoreArray(object))) {
+      const value = ignoreArray(val);
+      addPathValue([...path, '_id'], true);
+      addPathValue([...path, '_type'], true);
       if (isPlainObject(value)) {
         setFields(value, [...path, name]);
       } else {
-        if (path.length !== 0) {
-          addPathValue([...path, '_id'], 1);
-          addPathValue([...path, '_type'], 1);
+        if (!isRootPath) {
+          addPathValue([...path, '_ref'], true);
         }
         addPathValue([...path, name], value);
       }
@@ -301,6 +310,8 @@ export function parseSetRequest(request) {
   setFields(request, []);
   return {$set, $unset};
 }
+
+const ignoreArray = value => (Array.isArray(value) ? value[0] : value);
 
 /*
 
