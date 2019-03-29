@@ -140,6 +140,13 @@ describe('@storable/mongodb-store', () => {
       _id: 'xyz123',
       fullName: 'Christopher Nolan'
     });
+    await store.set({
+      _isNew: true,
+      _type: 'Playlist',
+      _id: 'list001',
+      title: 'Everybody hurts',
+      movies: [{_type: 'Movie', _id: 'abc003', _ref: true}]
+    });
 
     // The director can be fetched from 'Director'
     let director = await store.get({_type: 'Director', _id: 'xyz123'});
@@ -171,6 +178,23 @@ describe('@storable/mongodb-store', () => {
       director: {_type: 'Director', _id: 'xyz123', _ref: true}
     });
 
+    // Fetch the playlist with the movies and the directors... it's two-level deep "population"!
+    const playlist = await store.get({_type: 'Playlist', _id: 'list001'});
+    expect(playlist).toEqual({
+      _id: 'list001',
+      _type: 'Playlist',
+      title: 'Everybody hurts',
+      movies: [
+        {
+          _type: 'Movie',
+          _ref: true,
+          _id: 'abc003',
+          title: 'Inception',
+          director: {_type: 'Director', _ref: true, _id: 'xyz123', fullName: 'Christopher Nolan'}
+        }
+      ]
+    });
+
     // Let's delete the movie
     let result = await store.delete({_type: 'Movie', _id: 'abc003'});
     expect(result).toBe(true);
@@ -184,6 +208,8 @@ describe('@storable/mongodb-store', () => {
     expect(result).toBe(true);
     director = await store.get({_type: 'Director', _id: 'xyz123'});
     expect(movie).toBeUndefined(); // The director is gone
+
+    await store.delete({_type: 'Playlist', _id: 'list001'});
   });
 
   test('Arrays', async () => {
