@@ -2,9 +2,8 @@ import {MongoClient} from 'mongodb';
 import debugModule from 'debug';
 import {isEmpty, isInteger, isPlainObject, omit, get, set} from 'lodash';
 import filterObj from 'filter-obj';
+import assert from 'assert';
 import {callWithOneOrManyAsync, mapFromOneOrMany, mapFromOneOrManyAsync} from '@storable/util';
-
-import {getProjection} from './mongodb-util';
 
 import {findAllRelations, mergeRelatedDocuments, getPopulateRequests} from './relations-util';
 
@@ -40,6 +39,7 @@ export class MongoDBStore {
       const {_isNew, _type, _id} = doc;
       validateType(_type);
       validateId(_id);
+
       const {$set, $unset} = parseSetRequest(doc);
       if (_isNew) {
         const newDocument = $set;
@@ -47,7 +47,9 @@ export class MongoDBStore {
         const {result} = await this._getCollection(_type).insertOne(newDocument);
         return result;
       }
+
       const query = {_id};
+      // Remove empty $set and $unset from the MongoDB "update" parameter (it will fail otherwise)
       const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value));
       debugQuery(`Update ${_type} "${_id}"`, update);
       const result = await this._getCollection(_type).updateOne(query, update);
@@ -58,17 +60,27 @@ export class MongoDBStore {
     });
   }
 
-  async get(document, options) {
+  async get(document, options = {}) {
     return await mapFromOneOrManyAsync(document, async doc => {
-      if (Array.isArray(doc._id)) {
-        return await this._findMany(doc, options);
-      }
-      return await this._findOne(doc, options);
+      const {_id, _type} = doc;
+      validateType(_type);
+      validateId(_id);
+
+      const foundDocs = Array.isArray(_id) ?
+        await this._findMany(doc, options) :
+        await this._findOne(doc, options);
+
+      return mapFromOneOrMany(foundDocs, doc => {
+        return doc && outputDocument(doc, _type, options);
+      });
     });
   }
 
-  async find({_type, ...document}, options) {
-    return this._findMany(_type, document, options);
+  async find({_type, ...document}, options = {}) {
+    validateType(_type);
+
+    const documents = await this._findMany(_type, document, options);
+    return documents.map(doc => outputDocument(doc, _type, options));
   }
 
   async _findOne({_type, _id}, {return: returnFields = true} = {}) {
@@ -102,7 +114,8 @@ export class MongoDBStore {
       cursor = cursor.skip(skip);
     }
     const documents = await cursor.toArray();
-    return documents.map(document => ({_type, ...document}));
+    const populatedDocs = await this._populate(documents, returnFields);
+    return populatedDocs.map(document => ({_type, ...document}));
   }
 
   async _findManyById({_type, _id}, options) {
@@ -126,7 +139,6 @@ export class MongoDBStore {
       const docs = await await this._findManyById({_type, _id: ids}, {return: returnFields});
       relatedDocuments.push(...docs); // `...` is used to flatten the array of array
     }
-
     const populated = mergeRelatedDocuments(documents, relatedDocuments);
     return populated;
   }
@@ -158,6 +170,87 @@ async function connectMongoDB(url, databaseName) {
       client.close();
     }
   };
+}
+
+/*
+From the `returnFields` option of a store `get()` request,
+return the field `projection` to be passed to MongoDB `find` and `findOne` methods.
+*/
+export function getProjection(returnFields) {
+  if (returnFields === false) {
+    return {_id: 1};
+  }
+  if (returnFields === true) {
+    return {};
+  }
+  const result = {};
+  const addPathValue = (path, value) => {
+    const key = path.join('.');
+    result[key] = value;
+  };
+  const setFields = (object, path) => {
+    if (isEmpty(object)) {
+      addPathValue([...path, '_id'], 1);
+      addPathValue([...path, '_type'], 1);
+      addPathValue([...path, '_ref'], 1);
+    }
+    for (const [name, value] of Object.entries(object)) {
+      if (isPlainObject(value)) {
+        setFields(value, [...path, name]);
+      } else {
+        if (path.length !== 0) {
+          addPathValue([...path, '_id'], 1);
+          addPathValue([...path, '_type'], 1);
+        }
+        addPathValue([...path, name], value);
+      }
+    }
+    return result;
+  };
+  return setFields(returnFields, []);
+}
+
+/*
+Process a document, already populated after a find() request,
+before returning it to the client
+called by `.get()` and `.find()` public methods
+*/
+function outputDocument(doc, _type, options) {
+  const {_id: rootId} = doc;
+  const {returnFields} = options;
+  const setFields = document => {
+    const result = {};
+    const {...fields} = document;
+    for (const [name, value] of Object.entries(fields)) {
+      if (
+        Array.isArray(value) &&
+        !(returnFields === true || Array.isArray(returnFields) || returnFields === undefined)
+      ) {
+        throw new Error(
+          `Type mismatch (collection: '${_type}', id: '${rootId}', field: '${name}', expected: 'Boolean' or 'Array', provided: '${typeof returnFields}')`
+        );
+      }
+      if (Array.isArray(returnFields)) {
+        if (!Array.isArray(value)) {
+          throw new Error(
+            `Type mismatch (collection: '${_type}', id: '${rootId}', field: '${name}', expected: 'Boolean' or 'Object', provided: 'Array')`
+          );
+        }
+      }
+      assert(
+        value !== null,
+        `The 'null' value is not allowed (collection: '${_type}', id: '${rootId}', field: '${name}')`
+      );
+      if (isPrimitive(value, {fieldName: name, _type, rootId})) {
+        result[name] = serializeValue(value);
+        continue;
+      }
+      result[name] = setFields(value);
+    }
+    return result;
+  };
+  const result = setFields(doc);
+  return {_type, ...result};
 }
 
 /*
@@ -235,12 +328,12 @@ function validateId(_id) {
   }
 }
 
-// function serializeValue(value) {
-//   if (value instanceof Date) {
-//     return {_type: 'Date', _value: value.toISOString()};
-//   }
-//   return value;
-// }
+function serializeValue(value) {
+  if (value instanceof Date) {
+    return {_type: 'Date', _value: value.toISOString()};
+  }
+  return value;
+}
 
 function deserializeValue(value, {fieldName}) {
   if (value === null) {
