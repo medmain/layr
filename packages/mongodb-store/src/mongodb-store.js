@@ -12,17 +12,39 @@ const debugQuery = debugModule('mongodb-store:queries');
 
 export class MongoDBStore {
   constructor(connectionString, {collectionNames = {}} = {}) {
+    if (!connectionString) {
+      throw new Error(`No connectionString provided to connect to MongoDB!`);
+    }
     this.connectionString = connectionString;
     this.collectionNames = collectionNames;
+    this.isConnected = false;
   }
 
+  /*
+  Connect to the given database if no database is included at the end of the `connectionString`,
+  `test` database if no nothing is provided
+  */
   async connect(databaseName) {
-    if (this.db) {
-      return;
+    if (this.isConnected) {
+      return; // already connected
     }
-    const {db, disconnect} = await connectMongoDB(this.connectionString, databaseName);
-    this.db = db;
-    this.disconnect = disconnect;
+    debug('Connecting to MongoDB!');
+    this.client = await MongoClient.connect(
+      this.connectionString,
+      {useNewUrlParser: true}
+    );
+    this.db = this.client.db(databaseName);
+    this.isConnected = true;
+    debug(`Connected to "${this.db.databaseName}" database`);
+  }
+
+  disconnect() {
+    if (!this.isConnected) {
+      throw new Error('No MongoDB connection to close');
+    }
+    debug('Disconnecting MongoDB');
+    this.client.close();
+    this.isConnected = false;
   }
 
   _getCollection(_type) {
@@ -155,26 +177,6 @@ export class MongoDBStore {
       return result.n > 0;
     });
   }
-}
-
-async function connectMongoDB(url, databaseName) {
-  if (!url) {
-    throw new Error(`No connectionString provided to connect to MongoDB!`);
-  }
-  debug('Connecting to MongoDB...');
-  const client = await MongoClient.connect(
-    url,
-    {useNewUrlParser: true}
-  );
-  const db = client.db(databaseName); // `test` database if no databaseName is provided
-  debug(`Connected to "${db.databaseName}" database`);
-  return {
-    db,
-    disconnect: () => {
-      debug('Disconnecting MongoDB');
-      client.close();
-    }
-  };
 }
 
 /*
