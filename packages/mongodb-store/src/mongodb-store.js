@@ -118,7 +118,7 @@ export class MongoDBStore {
     return {_type, ...populatedDoc};
   }
 
-  async _findMany(_type, query, {return: returnFields = true, limit, skip} = {}) {
+  async _findMany(_type, query, {return: returnFields = true, sort, skip, limit} = {}) {
     const projection = getProjection(returnFields);
     debugQuery(`findMany ${_type}`, query, projection);
     await this.connect();
@@ -134,6 +134,12 @@ export class MongoDBStore {
         throw new Error('Find method `skip` parameter should be an integer');
       }
       cursor = cursor.skip(skip);
+    }
+    if (sort) {
+      if (!isPlainObject(sort)) {
+        throw new Error('Find method `sort` option should be a plain object');
+      }
+      cursor = cursor.sort(sort);
     }
     const documents = await cursor.toArray();
     const populatedDocs = await this._populate(documents, returnFields);

@@ -342,7 +342,8 @@ describe('@storable/mongodb-store', () => {
         _id: 'movie1',
         title: 'Inception',
         genre: 'action',
-        country: 'USA'
+        country: 'USA',
+        rating: 8
       },
       {
         _isNew: true,
@@ -350,7 +351,8 @@ describe('@storable/mongodb-store', () => {
         _id: 'movie2',
         title: 'Forrest Gump',
         genre: 'drama',
-        country: 'USA'
+        country: 'USA',
+        rating: 9
       },
       {
         _isNew: true,
@@ -358,12 +360,21 @@ describe('@storable/mongodb-store', () => {
         _id: 'movie3',
         title: 'Léon',
         genre: 'action',
-        country: 'France'
+        country: 'France',
+        rating: 5
       }
     ]);
 
     let movies = await store.find({_type: 'Movie'});
     expect(movies.map(movie => movie._id)).toEqual(['movie1', 'movie2', 'movie3']);
+
+    // Sort by rating ascending
+    movies = await store.find({_type: 'Movie'}, {sort: {rating: 1}});
+    expect(movies.map(movie => movie._id)).toEqual(['movie3', 'movie1', 'movie2']);
+
+    // Sort by rating descending
+    movies = await store.find({_type: 'Movie'}, {sort: {rating: -1}});
+    expect(movies.map(movie => movie._id)).toEqual(['movie2', 'movie1', 'movie3']);
 
     movies = await store.find({_type: 'Movie', genre: 'action'});
     expect(movies.map(movie => movie._id)).toEqual(['movie1', 'movie3']);
