@@ -45,6 +45,14 @@ describe('@storable/mongodb-store', () => {
     expect(movie).toEqual({_type: 'Movie', _id: 'abc001', title: 'The Matrix'});
     expect(Object.keys(movie).includes('genre')).toBe(false); // 'genre' has been deleted
 
+    await store.set({
+      _type: 'Movie',
+      _id: 'abc001',
+      createdAt: new Date('2019-03-31T23:30:00.000Z')
+    });
+    movie = await store.get({_type: 'Movie', _id: 'abc001'});
+    expect(movie.createdAt).toEqual({_type: 'Date', _value: '2019-03-31T23:30:00.000Z'}); // Serializing dates
+
     expect(
       store.set({_isNew: true, _type: 'Movie', _id: 'abc001', title: 'Inception'})
     ).rejects.toThrow(); // The document already exists so 'isNew' should be not be passed
