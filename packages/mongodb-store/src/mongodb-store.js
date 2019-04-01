@@ -113,10 +113,12 @@ export class MongoDBStore {
     const projection = getProjection(returnFields);
     debugQuery(`findOne ${_type}`, query, projection);
     await this.connect();
+
     const foundDoc = await this._getCollection(_type).findOne(query, {projection});
     if (!foundDoc) {
       return undefined;
     }
+
     const populatedDoc = await this._populate(foundDoc, returnFields);
     return {_type, ...populatedDoc};
   }
@@ -125,6 +127,7 @@ export class MongoDBStore {
     const projection = getProjection(returnFields);
     debugQuery(`findMany ${_type}`, query, projection);
     await this.connect();
+
     let cursor = this._getCollection(_type).find(query, {projection});
     if (limit) {
       if (!isInteger(limit)) {
@@ -145,6 +148,7 @@ export class MongoDBStore {
       cursor = cursor.sort(sort);
     }
     const documents = await cursor.toArray();
+
     const populatedDocs = await this._populate(documents, returnFields);
     return populatedDocs.map(document => ({_type, ...document}));
   }
@@ -178,9 +182,16 @@ export class MongoDBStore {
     return await mapFromOneOrManyAsync(document, async ({_type, _id}) => {
       validateType(_type);
       validateId(_id);
-      const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
-      return result.n > 0;
+
+      const isDeleted = await this._deleteOne(_type, {_id});
+      return isDeleted;
     });
+  }
+
+  async _deleteOne(_type, query) {
+    debugQuery(`delete ${_type}`, query);
+    const {result} = await this._getCollection(_type).deleteOne(query); // { n: 0, ok: 1 },
+    return result.n > 0;
   }
 }
 
@@ -318,12 +329,19 @@ export function buildMongoQuery(request) {
   return {$set, $unset};
 }
 
-const ignoreArray = value => (Array.isArray(value) ? value[0] : value);
+/*
+Return the first value of an array, "ignoring" the fact that the value is wrapped inside an array
+Useful for projections. E.g.  `return: {actors: [{name: true}]}`
+*/
+function ignoreArray(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 /*
 
 ==============================
 Helpers from the Memory Store
+TODO: share them
 ==============================
 
 */
