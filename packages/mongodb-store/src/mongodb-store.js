@@ -149,20 +149,17 @@ export class MongoDBStore {
     return populatedDocs.map(document => ({_type, ...document}));
   }
 
-  async _findManyById({_type, _id}, options) {
-    if (!Array.isArray(_id)) {
-      throw new Error(`"_id" parameter passed to findManyById should be an array`);
-    }
-    const query = {_id: {$in: _id}};
-    return this._findMany(_type, query, options);
-  }
-
   async _populate(documents, parentReturnFields) {
     const relations = findAllRelations(documents);
     if (isEmpty(relations)) {
       return documents;
     }
+    const relatedDocuments = await this._findRelatedDocuments(relations, parentReturnFields);
+    const populated = mergeRelatedDocuments(documents, relatedDocuments);
+    return populated;
+  }
 
+  async _findRelatedDocuments(relations, parentReturnFields) {
     const relatedDocuments = [];
     const requests = getPopulateRequests(relations);
     for (const {_type, path, ids} of requests) {
@@ -170,11 +167,10 @@ export class MongoDBStore {
       if (returnFields === false || (isPlainObject(returnFields) && isEmpty(returnFields))) {
         continue;
       }
-      const docs = await await this._findManyById({_type, _id: ids}, {return: returnFields});
+      const docs = await await this._findMany(_type, {_id: {$in: ids}}, {return: returnFields});
       relatedDocuments.push(...docs); // `...` is used to flatten the array of array
     }
-    const populated = mergeRelatedDocuments(documents, relatedDocuments);
-    return populated;
+    return relatedDocuments;
   }
 
   async delete(document) {
@@ -182,7 +178,6 @@ export class MongoDBStore {
     return await mapFromOneOrManyAsync(document, async ({_type, _id}) => {
       validateType(_type);
       validateId(_id);
-
       const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
       return result.n > 0;
     });
