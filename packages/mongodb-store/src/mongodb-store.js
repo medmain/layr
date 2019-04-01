@@ -62,24 +62,29 @@ export class MongoDBStore {
       validateType(_type);
       validateId(_id);
 
-      const {$set, $unset} = parseSetRequest(doc);
-      if (_isNew) {
-        const newDocument = $set;
-        debugQuery(`Insert ${_type}`, newDocument);
-        const {result} = await this._getCollection(_type).insertOne(newDocument);
-        return result;
-      }
-
-      const query = {_id};
-      // Remove empty $set and $unset from the MongoDB "update" parameter (it will fail otherwise)
-      const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value));
-      debugQuery(`Update ${_type} "${_id}"`, update);
-      const result = await this._getCollection(_type).updateOne(query, update);
-      if (result.matchedCount === 0) {
-        throw new Error(`No document "${_id}" found in the collection ${_type}`);
-      }
-      return true;
+      const {$set, $unset} = buildMongoQuery(doc);
+      const result = _isNew ?
+        await this._insertOne({_type, document: $set}) :
+        await this._updateOne({_type, _id, $set, $unset});
+      return result;
     });
+  }
+
+  async _insertOne({_type, document}) {
+    debugQuery(`Insert ${_type}`, document);
+    const {result} = await this._getCollection(_type).insertOne(document);
+    return result;
+  }
+
+  async _updateOne({_type, _id, $set, $unset}) {
+    const query = {_id};
+    const update = filterObj({$set, $unset}, (key, value) => !isEmpty(value)); // Remove empty $set and $unset to avoid errors
+    debugQuery(`Update ${_type} "${_id}"`, update);
+    const result = await this._getCollection(_type).updateOne(query, update);
+    if (result.matchedCount === 0) {
+      throw new Error(`No document "${_id}" found in the collection ${_type}`);
+    }
+    return true;
   }
 
   async get(document, options = {}) {
@@ -88,9 +93,7 @@ export class MongoDBStore {
       validateType(_type);
       validateId(_id);
 
-      const foundDocs = Array.isArray(_id) ?
-        await this._findMany(doc, options) :
-        await this._findOne(doc, options);
+      const foundDocs = await this._findOne(doc, options);
 
       return mapFromOneOrMany(foundDocs, doc => {
         return doc && outputDocument(doc, _type, options);
@@ -179,6 +182,7 @@ export class MongoDBStore {
     return await mapFromOneOrManyAsync(document, async ({_type, _id}) => {
       validateType(_type);
       validateId(_id);
+
       const {result} = await this._getCollection(_type).deleteOne({_id}); // { n: 0, ok: 1 },
       return result.n > 0;
     });
@@ -270,29 +274,29 @@ function outputDocument(doc, _type, options) {
   return {_type, ...result};
 }
 
+function cleanPrimitiveValue(value, name, {rootType, rootId}) {
+  return mapFromOneOrMany(value, value => {
+    if (!isPlainObject(value)) {
+      return value;
+    }
+    const {_type, _ref, _id} = value;
+    if (isReference(value, {fieldName: name, rootType, rootId})) {
+      return {_type, _ref, _id}; // discard any other attribute
+    }
+    return value;
+  });
+}
+
 /*
 Parse the document passed to `set()` method,
 to return the `$set` and `$unset` objects to be sent to MongoDB
 */
-export function parseSetRequest(request) {
+export function buildMongoQuery(request) {
   const $set = {};
   const $unset = {};
   const isNewDocument = request._isNew;
   const rootType = request._type;
   const rootId = request._id;
-
-  const cleanPrimitiveValue = (value, name) => {
-    return mapFromOneOrMany(value, value => {
-      if (!isPlainObject(value)) {
-        return value;
-      }
-      const {_type, _ref, _id} = value;
-      if (isReference(value, {fieldName: name, rootType, rootId})) {
-        return {_type, _ref, _id}; // discard any other attribute
-      }
-      return value;
-    });
-  };
 
   const setFields = (object, path = []) => {
     const {_type, _isNew, ...fields} = object;
@@ -303,7 +307,7 @@ export function parseSetRequest(request) {
         if (value === undefined) {
           $unset[fieldName] = 1;
         } else {
-          $set[fieldName] = cleanPrimitiveValue(value, fieldName);
+          $set[fieldName] = cleanPrimitiveValue(value, fieldName, {rootType, rootId});
         }
         continue;
       }
