@@ -18,6 +18,9 @@ const store = new MongoDBStore('mongodb://127.0.0.1/test');
 // Query the database
 const movie = await store.get({_type: 'Movie', _id: 'abc001'});
 
+// Update a document
+await store.set({_type: 'Movie', _id: 'abc001', rating: 9.1});
+
 // Close the MongoDB connection
 store.disconnect();
 ```
@@ -28,11 +31,11 @@ store.disconnect();
 
 The MongoDBStore constructor accepts two parameters:
 
-- the MongoDB "connection string": `mongodb://username:password@host:port/dbName?authSource=admin` for example
+- the MongoDB "connection string": `mongodb://<username>:<password>@<host>:<port>/<dbName>?authSource=<adminDbName>`
 - an object of `options` to customize the default behavior
   - `collectionNames`: an object to map document's `_type` property with the collection names
 
-### `set(document)`
+### `set(document)` method
 
 Used to **create** a new document or to **update** an existing document.
 
@@ -63,9 +66,9 @@ await store.set({
 - `_isNew: true` specifies a document **creation**. `_isNew: false` is used for document **updates**.
 - `_type` specifies the collection where to store the document
 - `_id`: is required only for updates. For creations, a unique id will be generated if it's not provided
-- All other properties (_title_, _genre_...) will be used to create the document in the collection.
+- All other properties (_title_, _genre_...) will be used to create or update the document in the collection.
 
-### `get(query, options)`
+### `get(document)` method
 
 Used to retrieve a single document by its id.
 
@@ -76,10 +79,11 @@ const movie = await store.get({_type: 'Movie', _id: 'abc001'});
 
 Available options:
 
-`return` specify the fields to be returned (the `projection` in MongoDB jargon).
+`return` specify the fields to be returned (the `projection` in the MongoDB jargon).
 
 - `{return: true}` means all fields will be returned, it's the default behavior
 - `{return: false}` means no field will be returned, only `_type` and `_id`. which is useful too check whether a document exists or not
+- `{return: {title: true}}` means only the `title` field will be returned.
 
 E.g.
 
@@ -88,7 +92,7 @@ const movie = await store.get({_type: 'Movie', _id: 'xyz123'}, {return: {title: 
 // => {_type: 'Movie', _id: 'abc001', title: 'Inception'}
 ```
 
-### `find(query, options)`
+### `find(document, options)` method
 
 Used to find several documents that match search criteria.
 Return an array of the matching documents, or an empty array if no document was found.
@@ -103,7 +107,7 @@ Available options:
 - `return`
 - `skip`
 - `limit`
-- `sort` (coming soon)
+- `sort`
 
 As for the `get()` method, the `find()` method accepts a `return` option to specify the fields to include in the response.
 
@@ -119,7 +123,9 @@ const movies = await store.find({_type: 'Movie'}, {return: {title: true}});
 
 `skip` and `limit` are used to paginate the list of results, requesting documents from a given index and limiting the number of documents returned.
 
-### `delete(query)`
+### `delete(document)`
+
+Delete a document by its id
 
 ```js
 const result = await store.delete({_type: 'Movie', _id: 'abc001'});
@@ -157,7 +163,7 @@ This feature is similar to the _population_ feature from [Mongoose](https://mong
 
 > Population is the process of automatically replacing the specified paths in the document with document(s) from other collection(s)
 
-So if we query the previous movie, the result will contain the Movie **and** its director:
+So if we query the previous movie, the result will contain the movie itself **and** its director:
 
 ```js
 const movie = await store.get({_type: 'Movie', _id: 'abc003'});
@@ -179,7 +185,7 @@ const movie = await store.get({_type: 'Movie', _id: 'abc003'}, {return: {title: 
 // => {_type: 'Movie', _id: 'abc003', title: 'Inception'}
 ```
 
-Using an empty object `{}` inside the `return` option, the population will be limited to the `_id`.
+Using an empty object `{}` inside the `return` option, the population will be limited to the fields `_type`, `_type` and `_ref`.
 
 ```js
 const movie = await store.get(
@@ -218,7 +224,7 @@ class Actor extends Document {
 }
 
 // STEP 2: create the store
-const store = new MongoDBStore({connectionString: 'mongodb://...');
+const store = new MongoDBStore('mongodb://...');
 
 // STEP 3: create the registry, putting the store and all models together
 const registry = new Registry({Movie, Actor, store});
@@ -240,7 +246,7 @@ await movie.save();
 
 ### Read existing documents
 
-`get` and `find` method return instances of documents:
+`get` and `find` method return instances of `Document`, that can be mutated later and saved later.
 
 ```js
 const movie = await registry.Movie.get('123abc');
@@ -276,7 +282,7 @@ Hooks are defined as methods on the models. Available hooks:
 
 Tips:
 
-- Use `this.isNew()` if you need to check whether the operation is a creation or an update.
+- In `beforeSave` and `afterSave` hooks, use `this.isNew()` if you need to check whether the operation is a creation or an update.
 - Don't forget to call the the hook on the parent class when the class extends an other one (`super.beforeSave()` for example)
 
 Example of `beforeSave` hook that adds `createdOn` and `updatedOn` fields on the document:

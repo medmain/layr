@@ -171,7 +171,7 @@ export class MongoDBStore {
       if (returnFields === false || (isPlainObject(returnFields) && isEmpty(returnFields))) {
         continue;
       }
-      const docs = await await this._findMany(_type, {_id: {$in: ids}}, {return: returnFields});
+      const docs = await this._findMany(_type, {_id: {$in: ids}}, {return: returnFields});
       relatedDocuments.push(...docs); // `...` is used to flatten the array of array
     }
     return relatedDocuments;

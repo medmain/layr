@@ -220,6 +220,15 @@ describe('@storable/mongodb-store', () => {
       ]
     });
 
+    // Check a more deeply nested object
+    await store.set({
+      _type: 'Playlist',
+      _id: 'list001',
+      a: {b: [{movie: {_type: 'Movie', _ref: true, _id: 'abc003'}}]}
+    });
+    playlist = await store.get({_type: 'Playlist', _id: 'list001'});
+    expect(playlist.a.b[0].movie.director.fullName).toBe('Christopher Nolan');
+
     // Let's delete the movie
     let result = await store.delete({_type: 'Movie', _id: 'abc003'});
     expect(result).toBe(true);
