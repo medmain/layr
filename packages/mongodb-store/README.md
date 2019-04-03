@@ -81,8 +81,8 @@ Available options:
 
 `return` specify the fields to be returned (the `projection` in the MongoDB jargon).
 
-- `{return: true}` means all fields will be returned, it's the default behavior
-- `{return: false}` means no field will be returned, only `_type` and `_id`. which is useful too check whether a document exists or not
+- `{return: true}` means all fields will be returned, it's the default behavior.
+- `{return: false}` means no field will be returned, except `_type` and `_id`. It's useful to check whether a document exists or not.
 - `{return: {title: true}}` means only the `title` field will be returned.
 
 ```js
