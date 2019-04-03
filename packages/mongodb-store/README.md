@@ -214,12 +214,19 @@ const movie = await store.get(
 
 MongoDBStore shines when it's used along with the registry coming from `@storable/registry` and models extending `@storable/document`.
 
-Let's put everything together:
+The CRUD features follow the [@storable/document](https://github.com/medmain/storable/tree/master/packages/document) API, providing the following methods:
+
+- `save()`
+- `get()`
+- `find()`
+- `delete()`
+
+Overview:
 
 ```js
 import {Document, field} from '@storable/document';
-import {MongoDBStore} from '@storable/mongodb-store';
 import {Registry} from '@storable/registry';
+import {MongoDBStore} from '@storable/mongodb-store';
 
 // STEP 1: define the models, extending the `Document` class
 class Movie extends Document {
@@ -235,75 +242,15 @@ const store = new MongoDBStore('mongodb://...');
 
 // STEP 3: create the registry, putting the store and all models together
 const registry = new Registry({Movie, Actor, store});
-```
 
-The CRUD features follow the [@storable/document](https://github.com/medmain/storable/tree/master/packages/document) API, providing the following methods:
-
-- `save()`
-- `get()`
-- `find()`
-- `delete()`
-
-### Create a new document
-
-```js
+// Creating a new document
 const movie = new registry.Movie({title: 'The Matrix'});
 await movie.save();
+
+store.disconnect();
 ```
 
-### Read existing documents
-
-`get` and `find` method return instances of `Document`, that can be mutated later and saved later.
-
-```js
-const movie = await registry.Movie.get('123abc');
-```
-
-```js
-const movies = await registry.Movie.find({});
-```
-
-### Update a document
-
-Updates are made by mutating the document properties (following the rules defined by the model) and calling the `save()` method
-
-```js
-movie.rating = 9.1;
-await movie.save();
-```
-
-### Delete a document
-
-```js
-await movie.delete();
-```
-
-### Hooks
-
-Hooks are defined as methods on the models. Available hooks:
-
-- beforeSave
-- afterSave
-- beforeDelete
-- afterDelete
-
-Tips:
-
-- In `beforeSave` and `afterSave` hooks, use `this.isNew()` if you need to check whether the operation is a creation or an update.
-- Don't forget to call the the hook on the parent class when the class extends an other one (`super.beforeSave()` for example)
-
-Example of `beforeSave` hook that adds `createdOn` and `updatedOn` fields on the document:
-
-```js
-async beforeSave() {
-  const now = new Date();
-  if (this.isNew()) {
-    this.createdOn = now;
-  } else {
-    this.updatedOn = now;
-  }
-}
-```
+Check [@storable/document](https://github.com/medmain/storable/tree/master/packages/document) for more details.
 
 ## Run the tests
 
