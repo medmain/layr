@@ -33,7 +33,7 @@ The MongoDBStore constructor accepts two parameters:
 
 - the MongoDB "connection string": `mongodb://<username>:<password>@<host>:<port>/<dbName>?authSource=<adminDbName>`
 - an object of `options` to customize the default behavior
-  - `collectionNames`: an object to map document's `_type` property with the collection names
+  - `collectionNames`: an object that associates document's `_type` property with the actual collection names. For example, using `{collectionNames: {Movie: 'movies'}}` will save document whose `_type` is `"Movie"` in a collection called `"movies"` (instead of `"Movie"` by default).
 
 ### `set(document)` method
 
@@ -68,7 +68,7 @@ await store.set({
 - `_id`: is required only for updates. For creations, a unique id will be generated if it's not provided
 - All other properties (_title_, _genre_...) will be used to create or update the document in the collection.
 
-### `get(document)` method
+### `get(document, options)` method
 
 Used to retrieve a single document by its id.
 
@@ -85,8 +85,6 @@ Available options:
 - `{return: false}` means no field will be returned, only `_type` and `_id`. which is useful too check whether a document exists or not
 - `{return: {title: true}}` means only the `title` field will be returned.
 
-E.g.
-
 ```js
 const movie = await store.get({_type: 'Movie', _id: 'xyz123'}, {return: {title: true}});
 // => {_type: 'Movie', _id: 'abc001', title: 'Inception'}
@@ -99,7 +97,7 @@ Return an array of the matching documents, or an empty array if no document was 
 
 ```js
 const movies = await store.find({_type: 'Movie'});
-// => will return the array of all documents in the `Movie` collection
+// => the array of all documents in the `Movie` collection
 ```
 
 Available options:
@@ -123,20 +121,29 @@ const movies = await store.find({_type: 'Movie'}, {return: {title: true}});
 
 `skip` and `limit` are used to paginate the list of results, requesting documents from a given index and limiting the number of documents returned.
 
+`sort` option is used to set the sort order.
+
+The following code will return the movies sorted by their rating, in the descending order, the number of documents is limited to 10.
+
+```js
+const topMovies = await store.find({_type: 'Movie'}, {sort: {rating: -1}, limit: 10});
+// => an array of the 10 best movies, according to the ratings
+```
+
 ### `delete(document)`
 
 Delete a document by its id
 
 ```js
 const result = await store.delete({_type: 'Movie', _id: 'abc001'});
-// => return true if the document has been deleted
+// => true if the document has been deleted
 ```
 
 ### How to reference documents
 
 The `_ref: true` attribute is used to reference documents in other collections.
 
-The following code will create 2 documents, in 2 different collections:
+The following code will create two documents, in two different collections:
 
 ```js
 // Create "Movie" document, that has a link (a reference) to a "Director" document
