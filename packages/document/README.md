@@ -23,6 +23,7 @@ import {Registry} from '@storable/registry';
 // STEP 1: define the models, extending the `Document` class
 class Movie extends Document {
   @field('string') title;
+  @field('Actor[]') actors;
 }
 
 class Actor extends Document {
@@ -35,6 +36,10 @@ const store = new MemoryStore();
 // STEP 3: create the registry, putting the store and all models together
 const registry = new Registry({Movie, Actor, store});
 ```
+
+## Model definition
+
+Go to [@storable/model](https://github.com/medmain/storable/tree/master/packages/model) documentation to see how to create models, using fields and validators.
 
 ## CRUD features
 
@@ -134,7 +139,9 @@ await movie.delete();
 
 ### Validation
 
-[Coming soon]
+Validation is provided by `Model` class, the `Document`'s parent class, coming from `@storable/model` package.
+
+Check [@storable/model](https://github.com/medmain/storable/tree/master/packages/model) documentation to see how fields can compose built-in and custom validators.
 
 ### Hooks
 
