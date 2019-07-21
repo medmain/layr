@@ -4,4 +4,6 @@
 	<br>
 </p>
 
-> Layr started at [Medmain](https://medmain.com), but it is now being developed independently within the [Layr organization](https://github.com/layrjs/layr).
+Layr started at [Medmain](https://medmain.com), but it is now developed independently within the [Layr organization](https://github.com/layrjs).
+
+Please visit the [new repository](https://github.com/layrjs/layr) for any upcoming changes.
