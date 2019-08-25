@@ -4,6 +4,6 @@
 	<br>
 </p>
 
-Layr started at [Medmain](https://medmain.com), but it is now developed independently within the [Layr organization](https://github.com/layrjs).
+Liaison (formerly named "Layr") started at [Medmain](https://medmain.com), but it is now developed independently within the [Liaison organization](https://github.com/liaisonjs).
 
-Please visit the [new repository](https://github.com/layrjs/layr) for any upcoming changes.
+Please visit the [new repository](https://github.com/liaisonjs/liaison) for any upcoming changes.
